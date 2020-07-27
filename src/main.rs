@@ -15,7 +15,7 @@ use tree_magic_mini::match_filepath;
 mod opt_levels;
 use opt_levels::*;
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "LosslessOptimiser")]
@@ -37,7 +37,7 @@ struct Opt {
 
 #[async_std::main]
 async fn main() -> Result<()> {
-    setup_logger(2).await?;
+    setup_logger(1).await?;
 
     let opt = Opt::from_args();
     println!("{:#?}", opt);
@@ -59,23 +59,41 @@ async fn main() -> Result<()> {
         opt_level = opt.req_opt_level.unwrap();
     }
 
+    let mut oxipng_args = get_oxipng_options(opt_level).await?;
+    if opt.verbose {
+        oxipng_args.push_str(" -v")
+    }
+
     // For each file given to us
     for file in opt.files.iter() {
         let file_path = file.as_path();
 
         // check if the file extension is a .png
-        if file.ends_with(".png") {
+        if file.extension().unwrap() == "png" {
             // now check that the file is actually a png and if not, show a warning and skip the file
             if match_filepath("image/png", file_path) {
                 info!("{:?} is a valid (A)PNG file", file);
-                let mut oxipng_args = get_oxipng_options(opt_level).await?;
-                Command::new("cmd").args(&["/c", "oxipng.exe "]);
+
+                oxipng_args.push_str(&format!(" {}", file.file_name().unwrap().to_str().unwrap()));
+                debug!("oxipng_args: {:#?}", oxipng_args);
+
+                Command::new("cmd")
+                    .arg("/c")
+                    .arg("oxipng.exe")
+                    .args(oxipng_args.split(' '))
+                    .stderr(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .output()
+                    .expect("oxipng.exe missing");
             } else {
-                warn!("{:?} has a \".png\" file extension but ISN'T a valid (A)PNG file!", file);
+                warn!(
+                    "{:?} has a \".png\" file extension but ISN'T a valid (A)PNG file!",
+                    file
+                );
                 warn!("Skipping file with incorrect extension");
                 continue;
             }
-        } else if file.ends_with(".jpg") || file.ends_with(".jpeg") {
+        } else if file.extension().unwrap() == "jpg" || file.extension().unwrap() == ".jpeg" {
             if match_filepath("image/jpg", file_path) {
                 info!("{:?} is a valid JPG file", file);
             } else {
