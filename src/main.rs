@@ -3,10 +3,11 @@
 use anyhow::{anyhow, Result};
 
 mod logger;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use logger::setup_logger;
 
 use std::path::PathBuf;
+use dunce::canonicalize;
 
 use structopt::StructOpt;
 
@@ -59,13 +60,16 @@ async fn main() -> Result<()> {
         opt_level = opt.req_opt_level.unwrap();
     }
 
+    // oxipng optimisation args
     let mut oxipng_args = get_oxipng_options(opt_level).await?;
-    if opt.verbose {
-        oxipng_args.push_str(" -v")
-    }
+    if opt.verbose { oxipng_args.push_str(" -v") }
+
+    // ect optimisation args
+    let mut ect_args = get_ect_options(opt_level).await?;
 
     // For each file given to us
     for file in opt.files.iter() {
+        let file = canonicalize(file)?;
         let file_path = file.as_path();
 
         // check if the file extension is a .png
@@ -74,7 +78,10 @@ async fn main() -> Result<()> {
             if match_filepath("image/png", file_path) {
                 info!("{:?} is a valid (A)PNG file", file);
 
-                oxipng_args.push_str(&format!(" {}", file.file_name().unwrap().to_str().unwrap()));
+                // Run it through oxipng first to optimise it, then ECT
+
+                oxipng_args.push(' ');
+                oxipng_args.push_str(file.file_name().unwrap().to_str().unwrap());
                 debug!("oxipng_args: {:#?}", oxipng_args);
 
                 if cfg!(target_os = "windows") {
@@ -96,6 +103,30 @@ async fn main() -> Result<()> {
                             .output()
                             .expect("oxipng missing, please install it with your preferred package manager");
                 };
+
+                ect_args.push(' ');
+                ect_args.push_str(file.file_name().unwrap().to_str().unwrap());
+                debug!("ect_args: {:#?}", ect_args);
+
+                if cfg!(target_os = "windows") {
+                    Command::new("cmd")
+                            .arg("/c")
+                            .arg("ect.exe")
+                            .args(ect_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("ect.exe missing");
+                } else {
+                    Command::new("sh")
+                            .arg("-c")
+                            .arg("ect")
+                            .args(ect_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("ECT missing, please install it with your preferred package manager");
+                };
             } else {
                 warn!(
                     "{:?} has a \".png\" file extension but ISN'T a valid (A)PNG file!",
@@ -105,8 +136,32 @@ async fn main() -> Result<()> {
                 continue;
             }
         } else if file.extension().unwrap() == "jpg" || file.extension().unwrap() == ".jpeg" {
-            if match_filepath("image/jpg", file_path) {
+            if match_filepath("image/jpeg", file_path) {
                 info!("{:?} is a valid JPG file", file);
+
+                ect_args.push(' ');
+                ect_args.push_str(file.file_name().unwrap().to_str().unwrap());
+                debug!("ect_args: {:#?}", ect_args);
+
+                if cfg!(target_os = "windows") {
+                    Command::new("cmd")
+                            .arg("/c")
+                            .arg("ect.exe")
+                            .args(ect_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("ect.exe missing");
+                } else {
+                    Command::new("sh")
+                            .arg("-c")
+                            .arg("ect")
+                            .args(ect_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("ECT missing, please install it with your preferred package manager");
+                };
             } else {
                 warn!(
                     "{:?} has a \".jpg\"/\".jpeg\" file extension but ISN'T a valid JPEG file!",
