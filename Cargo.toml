@@ -1,0 +1,17 @@
+[package]
+name = "lossless-optimiser"
+version = "0.1.0"
+authors = ["Oscar Nardone <PaintNinja@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dunce = "^1.0.1" # For making paths consistently usable in Windows
+async-std = { version = "^1.6.2", features = ["attributes"] } # Helps with async/await, parallelism, etc
+anyhow = "1.0.*" # Much simpler error handling, no more of the annoying .unwrap()
+log = "^0.4.8" # base library for logging
+simplelog = { version = "0.8.*", default-features = false } # uses the base log library to add info!(), debug!(), warn!(), etc...
+#indicatif = "0.15.0" # for CLI progress bars
+structopt = "0.3.15" # for CLI args
+tree_magic_mini = "1.0.0" # for detecting file types beyond just simple file extension checking
