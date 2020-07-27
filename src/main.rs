@@ -6,8 +6,8 @@ mod logger;
 use log::{debug, info, warn};
 use logger::setup_logger;
 
-use std::path::PathBuf;
 use dunce::canonicalize;
+use std::path::PathBuf;
 
 use structopt::StructOpt;
 
@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 struct Opt {
     /// Optimisation level, from 0 to 9
     /// Higher numbers will result in increasingly smaller files but will also take increasingly longer to complete.
-    /// If ommitted, the default value of 5 will be used.
+    /// If ommitted, the default value of 6 will be used.
     #[structopt(short = "o", long = "opt-level")]
     req_opt_level: Option<u8>,
 
@@ -55,17 +55,25 @@ async fn main() -> Result<()> {
 
     let opt_level;
     if opt.req_opt_level.is_none() {
-        opt_level = 5;
+        opt_level = 6;
     } else {
         opt_level = opt.req_opt_level.unwrap();
     }
 
     // oxipng optimisation args
     let mut oxipng_args = get_oxipng_options(opt_level).await?;
-    if opt.verbose { oxipng_args.push_str(" -v") }
+    if opt.verbose {
+        oxipng_args.push_str("-v ")
+    }
 
     // ect optimisation args
     let mut ect_args = get_ect_options(opt_level).await?;
+
+    // jpegtran
+    let mut jpegtran_args = get_jpegtran_options(opt_level).await?;
+    if opt.verbose {
+        jpegtran_args.push_str("-verbose ")
+    }
 
     // For each file given to us
     for file in opt.files.iter() {
@@ -80,28 +88,29 @@ async fn main() -> Result<()> {
 
                 // Run it through oxipng first to optimise it, then ECT
 
-                oxipng_args.push(' ');
                 oxipng_args.push_str(file.file_name().unwrap().to_str().unwrap());
                 debug!("oxipng_args: {:#?}", oxipng_args);
 
                 if cfg!(target_os = "windows") {
                     Command::new("cmd")
-                            .arg("/c")
-                            .arg("oxipng.exe")
-                            .args(oxipng_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("oxipng.exe missing");
+                        .arg("/c")
+                        .arg("oxipng.exe")
+                        .args(oxipng_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect("oxipng.exe missing");
                 } else {
                     Command::new("sh")
-                            .arg("-c")
-                            .arg("oxipng")
-                            .args(oxipng_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("oxipng missing, please install it with your preferred package manager");
+                        .arg("-c")
+                        .arg("oxipng")
+                        .args(oxipng_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect(
+                            "oxipng missing, please install it with your preferred package manager",
+                        );
                 };
 
                 ect_args.push(' ');
@@ -110,22 +119,24 @@ async fn main() -> Result<()> {
 
                 if cfg!(target_os = "windows") {
                     Command::new("cmd")
-                            .arg("/c")
-                            .arg("ect.exe")
-                            .args(ect_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("ect.exe missing");
+                        .arg("/c")
+                        .arg("ect.exe")
+                        .args(ect_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect("ect.exe missing");
                 } else {
                     Command::new("sh")
-                            .arg("-c")
-                            .arg("ect")
-                            .args(ect_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("ECT missing, please install it with your preferred package manager");
+                        .arg("-c")
+                        .arg("ect")
+                        .args(ect_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect(
+                            "ECT missing, please install it with your preferred package manager",
+                        );
                 };
             } else {
                 warn!(
@@ -139,28 +150,55 @@ async fn main() -> Result<()> {
             if match_filepath("image/jpeg", file_path) {
                 info!("{:?} is a valid JPG file", file);
 
-                ect_args.push(' ');
+                jpegtran_args.push_str("-outfile ");
+                jpegtran_args.push_str(file.file_name().unwrap().to_str().unwrap());
+                jpegtran_args.push(' ');
+                jpegtran_args.push_str(file.file_name().unwrap().to_str().unwrap());
+                debug!("jpegtran_args: {:#?}", jpegtran_args);
+
+                if cfg!(target_os = "windows") {
+                    Command::new("cmd")
+                        .arg("/c")
+                        .arg("jpegtran.exe")
+                        .args(jpegtran_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect("jpegtran.exe missing");
+                } else {
+                    Command::new("sh")
+                            .arg("-c")
+                            .arg("jpegtran")
+                            .args(jpegtran_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("jpegtran missing, please install it with your preferred package manager");
+                };
+
                 ect_args.push_str(file.file_name().unwrap().to_str().unwrap());
                 debug!("ect_args: {:#?}", ect_args);
 
                 if cfg!(target_os = "windows") {
                     Command::new("cmd")
-                            .arg("/c")
-                            .arg("ect.exe")
-                            .args(ect_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("ect.exe missing");
+                        .arg("/c")
+                        .arg("ect.exe")
+                        .args(ect_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect("ect.exe missing");
                 } else {
                     Command::new("sh")
-                            .arg("-c")
-                            .arg("ect")
-                            .args(ect_args.split(' '))
-                            .stderr(Stdio::inherit())
-                            .stdout(Stdio::inherit())
-                            .output()
-                            .expect("ECT missing, please install it with your preferred package manager");
+                        .arg("-c")
+                        .arg("ect")
+                        .args(ect_args.split(' '))
+                        .stderr(Stdio::inherit())
+                        .stdout(Stdio::inherit())
+                        .output()
+                        .expect(
+                            "ECT missing, please install it with your preferred package manager",
+                        );
                 };
             } else {
                 warn!(
