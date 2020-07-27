@@ -77,14 +77,25 @@ async fn main() -> Result<()> {
                 oxipng_args.push_str(&format!(" {}", file.file_name().unwrap().to_str().unwrap()));
                 debug!("oxipng_args: {:#?}", oxipng_args);
 
-                Command::new("cmd")
-                    .arg("/c")
-                    .arg("oxipng.exe")
-                    .args(oxipng_args.split(' '))
-                    .stderr(Stdio::inherit())
-                    .stdout(Stdio::inherit())
-                    .output()
-                    .expect("oxipng.exe missing");
+                if cfg!(target_os = "windows") {
+                    Command::new("cmd")
+                            .arg("/c")
+                            .arg("oxipng.exe")
+                            .args(oxipng_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("oxipng.exe missing");
+                } else {
+                    Command::new("sh")
+                            .arg("-c")
+                            .arg("oxipng")
+                            .args(oxipng_args.split(' '))
+                            .stderr(Stdio::inherit())
+                            .stdout(Stdio::inherit())
+                            .output()
+                            .expect("oxipng missing, please install it with your preferred package manager");
+                };
             } else {
                 warn!(
                     "{:?} has a \".png\" file extension but ISN'T a valid (A)PNG file!",
